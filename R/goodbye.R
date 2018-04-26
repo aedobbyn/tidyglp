@@ -1,6 +1,7 @@
 
 library(Rglpk)
 library(tidyverse)
+library(assertthat)
 
 # Example from package
 obj <- c(2, 4, 3)
@@ -12,28 +13,57 @@ max <- TRUE
 Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
 
 # In dataframe format
-df <- mat %>%
+obj_df <- matrix(obj, nrow = 1) %>%
   as_tibble() %>%
+  mutate(
+    dir = NA,
+    rhs = NA
+  )
+
+df <- as_tibble(mat) %>%
   mutate(dir = dir,
-         rhs = rhs,
-         obj = obj)
+         rhs = rhs)
+
+full_df <- obj_df %>%
+  bind_rows(df)
 
 
-tidy_glp <- function(tbl, obj_col, dir_col, rhs_col, maximize = FALSE, ...) {
+tidy_glp <- function(tbl, obj_row, dir_col, rhs_col,
+                     maximize = FALSE, types = NULL,
+                     ...) {
 
-  matrix_cols <- which(!names(tbl) %in% c(obj_col, dir_col, rhs_col))
+  if (is.null(types)) {
+    types <- "continuous"
+  }
 
-  out <- Rglpk_solve_LP(obj = tbl[[obj_col]],
+  assertthat::assert_that(types %in% c("continuous", "integer", "binary"),
+                          msg = "types must be continuous, integer, or binary")
+
+  if (types == "integer") {
+    types <- rep("I", nrow(tbl))
+  } else if (types == "binary") {
+    types <- rep("B", nrow(tbl))
+  } else if (types == "continuous") {
+    types <- rep("C", nrow(tbl))
+  }
+
+  matrix_cols <- which(!names(tbl) %in% c(dir_col, rhs_col))
+
+  obj_vec <- tbl[obj_row, matrix_cols]
+  tbl <- tbl[-obj_row, ]
+
+  out <- Rglpk_solve_LP(obj = obj_vec,
                         mat = as.matrix(tbl[, matrix_cols]),    # matrix(as_vector(tbl[, matrix_cols]), nrow = nrow(tbl))
                         dir = tbl[[dir_col]],
                         rhs = tbl[[rhs_col]],
-                        max = maximize
+                        max = maximize,
+                        types = types
                         )
 
   return(out)
 }
 
-tidy_glp(df, obj_col = "obj", dir_col = "dir", rhs_col = "rhs", maximize = TRUE)
+tidy_glp(full_df, obj_row = 1, dir_col = "dir", rhs_col = "rhs", maximize = TRUE)
 
 
 
