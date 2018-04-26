@@ -1,4 +1,6 @@
 
+# https://github.com/cran/Rglpk/blob/master/R/Rglpk_solve.R
+
 library(Rglpk)
 library(tidyverse)
 library(assertthat)
@@ -12,20 +14,24 @@ max <- TRUE
 
 Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
 
-# In dataframe format
+# Create objective row
 obj_df <- matrix(obj, nrow = 1) %>%
   as_tibble() %>%
   mutate(
     dir = NA,
-    rhs = NA
+    rhs = NA,
+    role = "obj"
   )
 
-df <- as_tibble(mat) %>%
+# Create constraint
+constraint_df <- as_tibble(mat) %>%
   mutate(dir = dir,
-         rhs = rhs)
+         rhs = rhs,
+         role = "constraint")
 
+# Add objective row as first row of full dataframe and constraints as the rest
 full_df <- obj_df %>%
-  bind_rows(df)
+  bind_rows(constraint_df)
 
 
 tidy_glp <- function(tbl, obj_row, dir_col, rhs_col,
@@ -65,7 +71,9 @@ tidy_glp <- function(tbl, obj_row, dir_col, rhs_col,
 
 tidy_glp(full_df, obj_row = 1, dir_col = "dir", rhs_col = "rhs", maximize = TRUE)
 
-
+tidy_glp(full_df, obj_row = 1, dir_col = "dir", rhs_col = "rhs", maximize = TRUE,
+         bounds = list(lower = list(ind = 1:3,
+                                    val = 5:7)))
 
 
 
@@ -76,13 +84,16 @@ df <- as_tibble(mtcars) %>%
   select(1:4) %>%
   slice(1:5) %>%
   mutate(
-    dir_obs = c(">", ">", "<=", ">=", "<")
+    dir_obs = c(NA, ">", "<=", ">=", "<")
   ) %>%
   select(2:5, 1) %>%   # mpg is rhs
   mutate(
-    mpg = mpg + 500,
-    obj_obs = 300:304
+    mpg = c(NA, 201, 300, 100, 500)
   )
 
-tidy_glp(df, obj_col = "obj_obs", dir_col = "dir_obs", rhs_col = "mpg")
+tidy_glp(df, obj_row = 1, dir_col = "dir_obs", rhs_col = "mpg")
+
+
+
+
 
